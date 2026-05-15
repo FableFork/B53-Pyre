@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, app, BrowserWindow } from 'electron'
+import { ipcMain, dialog, shell, app, BrowserWindow, Notification } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
