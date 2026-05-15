@@ -15,6 +15,27 @@ import type {
   HoudiniProbeResult, LogLine, AppSettings
 } from '@shared/types'
 
+// ─── Output path token resolver ───────────────────────────────────────────────
+
+function resolvePathTokens(
+  template: string,
+  job: RenderJob,
+  extra: Record<string, string> = {}
+): string {
+  const now = new Date()
+  const base = path.basename(job.fileName, path.extname(job.fileName))
+  const map: Record<string, string> = {
+    filename: base,
+    hip: base,                                          // Houdini alias
+    date: now.toISOString().slice(0, 10).replace(/-/g, ''),
+    time: now.toTimeString().slice(0, 5).replace(':', ''),
+    frame: '####',                                      // Blender native
+    ...extra
+  }
+  // Replace known tokens; leave unknown ones untouched so Blender/$HIP etc. pass through
+  return template.replace(/\{(\w+)\}/g, (_, key) => map[key] ?? `{${key}}`)
+}
+
 // ─── In-memory job queue ──────────────────────────────────────────────────────
 
 let jobs: RenderJob[] = []
@@ -261,16 +282,31 @@ async function startRenderJob(jobId: string): Promise<void> {
     if (job.engine === 'blender') {
       const blenderPath = settings.binaryPaths.blender
       if (!blenderPath) throw new Error('Blender not configured')
-      await Blender.renderBlenderJob(
-        blenderPath, job.filePath, job.config as BlenderJobConfig, jobId, callbacks
-      )
+      const cfg = job.config as BlenderJobConfig
+      const resolvedConfig: BlenderJobConfig = {
+        ...cfg,
+        outputPath: resolvePathTokens(cfg.outputPath, job, {
+          scene: cfg.selectedScene,
+          layer: cfg.selectedViewLayers[0] ?? '',
+          // {camera} intentionally left unresolved — the batch loop in blender.ts
+          // resolves it per-camera so each camera gets its own path
+        })
+      }
+      await Blender.renderBlenderJob(blenderPath, job.filePath, resolvedConfig, jobId, callbacks)
     } else {
       const hythonPath = settings.binaryPaths.houdini
       if (!hythonPath) throw new Error('hython not configured')
+      const cfg = job.config as HoudiniJobConfig
+      const ropName = cfg.selectedROP.split('/').pop() ?? ''
+      const resolvedConfig: HoudiniJobConfig = {
+        ...cfg,
+        outputPath: resolvePathTokens(cfg.outputPath, job, {
+          rop: ropName,
+          // {camera} left for per-camera resolution in houdini.ts batch loop
+        })
+      }
       const renderScript = getUserScriptPath('houdini_render.py')
-      await Houdini.renderHoudiniJob(
-        hythonPath, job.filePath, job.config as HoudiniJobConfig, renderScript, jobId, callbacks
-      )
+      await Houdini.renderHoudiniJob(hythonPath, job.filePath, resolvedConfig, renderScript, jobId, callbacks)
     }
   } catch (err) {
     callbacks.onError((err as Error).message)

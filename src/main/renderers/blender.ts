@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import type { BlenderProbeResult, BlenderJobConfig, LogLine } from '@shared/types'
+import { suspendProcess, resumeProcess } from '../process-control'
 
 export interface RenderCallbacks {
   onLog: (line: LogLine) => void
@@ -169,12 +170,19 @@ export async function renderBlenderJob(
 
   for (let camIdx = 0; camIdx < cameraBatch.length; camIdx++) {
     const camera = cameraBatch[camIdx]
+    // Resolve any {camera} token the user put in the output path.
+    // If they didn't include {camera} and it's a batch render, append
+    // the camera name as a subfolder automatically.
+    const hadCameraToken = config.outputPath.includes('{camera}')
+    const resolvedOutput = config.outputPath.replace(/\{camera\}/g, camera)
+    const finalOutput = cameraBatch.length > 1 && !hadCameraToken
+      ? path.join(resolvedOutput, camera, '####')
+      : resolvedOutput
+
     const batchConfig: BlenderJobConfig = {
       ...config,
       selectedCamera: camera,
-      outputPath: cameraBatch.length > 1
-        ? path.join(config.outputPath, camera, '####')
-        : config.outputPath
+      outputPath: finalOutput
     }
 
     fs.writeFileSync(configPath, JSON.stringify(batchConfig, null, 2))
@@ -271,24 +279,14 @@ export function killRender(jobId: string): void {
 
 export function suspendRender(jobId: string): boolean {
   const proc = activeRenders.get(jobId)
-  if (!proc || proc.pid == null) return false
-  if (os.platform() === 'win32') {
-    try {
-      spawn('taskkill', ['/PID', String(proc.pid), '/T'])
-      return true
-    } catch { return false }
-  } else {
-    try { process.kill(proc.pid, 'SIGSTOP'); return true } catch { return false }
-  }
+  if (!proc?.pid) return false
+  return suspendProcess(proc.pid)
 }
 
 export function resumeRender(jobId: string): boolean {
   const proc = activeRenders.get(jobId)
-  if (!proc || proc.pid == null) return false
-  if (os.platform() !== 'win32') {
-    try { process.kill(proc.pid, 'SIGCONT'); return true } catch { return false }
-  }
-  return false
+  if (!proc?.pid) return false
+  return resumeProcess(proc.pid)
 }
 
 export function cleanupJob(jobId: string): void {

@@ -4,6 +4,7 @@ import * as path from 'path'
 import * as os from 'os'
 import type { HoudiniProbeResult, HoudiniJobConfig, LogLine } from '@shared/types'
 import type { RenderCallbacks } from './blender'
+import { suspendProcess, resumeProcess } from '../process-control'
 
 const activeProbes = new Map<string, ChildProcess>()
 const activeRenders = new Map<string, ChildProcess>()
@@ -87,12 +88,17 @@ export async function renderHoudiniJob(
     : [config.selectedCamera ?? '']
 
   for (const camera of cameraBatch) {
+    const cameraSlug = camera.replace(/\//g, '_')
+    const hadCameraToken = config.outputPath.includes('{camera}')
+    const resolvedOutput = config.outputPath.replace(/\{camera\}/g, cameraSlug)
+    const finalOutput = cameraBatch.length > 1 && camera && !hadCameraToken
+      ? path.join(resolvedOutput, cameraSlug, '$F4')
+      : resolvedOutput
+
     const batchConfig: HoudiniJobConfig = {
       ...config,
       selectedCamera: camera || config.selectedCamera,
-      outputPath: cameraBatch.length > 1 && camera
-        ? path.join(config.outputPath, camera.replace(/\//g, '_'), '$F4')
-        : config.outputPath
+      outputPath: finalOutput
     }
 
     const configPath = path.join(tmpDir, `config_${camera || 'default'}.json`)
@@ -172,19 +178,13 @@ export function killRender(jobId: string): void {
 export function suspendRender(jobId: string): boolean {
   const proc = activeRenders.get(jobId)
   if (!proc?.pid) return false
-  if (os.platform() !== 'win32') {
-    try { process.kill(proc.pid, 'SIGSTOP'); return true } catch { return false }
-  }
-  return false
+  return suspendProcess(proc.pid)
 }
 
 export function resumeRender(jobId: string): boolean {
   const proc = activeRenders.get(jobId)
   if (!proc?.pid) return false
-  if (os.platform() !== 'win32') {
-    try { process.kill(proc.pid, 'SIGCONT'); return true } catch { return false }
-  }
-  return false
+  return resumeProcess(proc.pid)
 }
 
 export function cleanupJob(jobId: string): void {
