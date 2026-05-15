@@ -236,16 +236,16 @@ export async function renderBlenderJob(
 
       proc.stdout.on('data', (chunk: Buffer) => {
         lineBuffer += chunk.toString()
-        const lines = lineBuffer.split('\n')
+        const lines = lineBuffer.split(/\r?\n|\r/)
         lineBuffer = lines.pop() ?? ''
         lines.forEach(processLine)
       })
 
-      // Blender writes Fra:/Rendered progress lines to stderr on Windows —
-      // run it through the same parser so the progress bar actually updates.
+      // Blender writes Fra:/Rendered progress to stderr on Windows, and uses
+      // \r (not \n) for in-place terminal updates — split on both.
       proc.stderr.on('data', (chunk: Buffer) => {
         stderrBuffer += chunk.toString()
-        const lines = stderrBuffer.split('\n')
+        const lines = stderrBuffer.split(/\r?\n|\r/)
         stderrBuffer = lines.pop() ?? ''
         lines.forEach(processLine)
       })

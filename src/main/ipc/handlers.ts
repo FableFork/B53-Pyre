@@ -253,8 +253,11 @@ async function startRenderJob(jobId: string): Promise<void> {
       const j = getJob(jobId)
       if (!j) return
       const elapsed = j.startedAt ? (Date.now() - j.startedAt) / 1000 : 0
-      const fps = elapsed > 0 ? frame / elapsed : 0
-      const remaining = fps > 0 ? (total - frame) / fps : 0
+      // frame is the absolute frame number; derive relative position for fps/ETA
+      const frameStart = (j.config as { frameStart?: number }).frameStart ?? 1
+      const relativeFrame = Math.max(1, frame - frameStart + 1)
+      const fps = elapsed > 0 ? relativeFrame / elapsed : 0
+      const remaining = fps > 0 ? (total - relativeFrame) / fps : 0
       updateJob(jobId, {
         currentFrame: frame,
         totalFrames: total,

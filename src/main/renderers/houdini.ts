@@ -141,15 +141,14 @@ export async function renderHoudiniJob(
 
       proc.stdout.on('data', (chunk: Buffer) => {
         lineBuffer += chunk.toString()
-        const lines = lineBuffer.split('\n')
+        const lines = lineBuffer.split(/\r?\n|\r/)
         lineBuffer = lines.pop() ?? ''
         lines.forEach(processLine)
       })
 
-      // Houdini also writes render progress to stderr — parse it the same way.
       proc.stderr.on('data', (chunk: Buffer) => {
         stderrBuffer += chunk.toString()
-        const lines = stderrBuffer.split('\n')
+        const lines = stderrBuffer.split(/\r?\n|\r/)
         stderrBuffer = lines.pop() ?? ''
         lines.forEach(processLine)
       })
