@@ -420,7 +420,8 @@ function registerHandlers(): void {
   ipcMain.handle('job:start', async (_, jobId: string) => {
     const job = getJob(jobId)
     if (!job || job.status === 'rendering') return
-    if (job.status !== 'queued' && job.status !== 'idle') {
+    // Promote to queued regardless of current status (idle, error, done, paused)
+    if (job.status !== 'queued') {
       updateJob(jobId, { status: 'queued' })
     }
     await startNextJobs()
@@ -497,7 +498,8 @@ function registerHandlers(): void {
   ipcMain.handle('settings:get', async () => getSettings())
 
   ipcMain.handle('settings:set', async (_, patch: Partial<AppSettings>) => {
-    setSettings(patch)
+    const updated = setSettings(patch)
+    emit('settings:changed', updated)
   })
 
   // Binary detection

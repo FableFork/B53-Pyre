@@ -34,32 +34,41 @@ function findBlenderInDir(dir: string): string | null {
   return null
 }
 
-function getBlenderVersion(blenderPath: string): string | null {
+function getBlenderVersion(blenderPath: string): { version: string | null; output: string; exitCode: number | null } {
   try {
-    const result = spawnSync(blenderPath, ['--version'], {
-      timeout: 8000,
-      encoding: 'utf8'
-    })
-    const stdout = result.stdout || ''
-    const match = stdout.match(/Blender\s+([\d.]+)/)
-    return match ? match[1] : null
-  } catch {
-    return null
+    // On Windows, blender.exe is a GUI-subsystem app — stdout isn't captured
+    // unless we go through cmd.exe (a CUI process that can redirect GUI app I/O).
+    const isWin = os.platform() === 'win32'
+    const result = isWin
+      ? spawnSync('cmd', ['/c', blenderPath, '--version'], {
+          timeout: 10000,
+          encoding: 'utf8',
+          windowsHide: true
+        })
+      : spawnSync(blenderPath, ['--version'], {
+          timeout: 10000,
+          encoding: 'utf8'
+        })
+    const output = (result.stdout || '') + (result.stderr || '')
+    const match = output.match(/Blender\s+([\d.]+)/)
+    return { version: match ? match[1] : null, output, exitCode: result.status }
+  } catch (e) {
+    return { version: null, output: (e as Error).message, exitCode: null }
   }
 }
 
 export function detectBlender(): DetectResult {
+  const ver = (p: string) => getBlenderVersion(p).version
+
   // 1. Check PATH
   const fromPath = which('blender')
-  if (fromPath) {
-    return { path: fromPath, version: getBlenderVersion(fromPath) }
-  }
+  if (fromPath) return { path: fromPath, version: ver(fromPath) }
 
   if (os.platform() === 'win32') {
     // 2. Check Program Files dirs
     for (const dir of BLENDER_WIN_DIRS) {
       const found = findBlenderInDir(dir)
-      if (found) return { path: found, version: getBlenderVersion(found) }
+      if (found) return { path: found, version: ver(found) }
     }
     // 3. Registry (best-effort)
     try {
@@ -71,12 +80,12 @@ export function detectBlender(): DetectResult {
       const match = regOut.match(/REG_SZ\s+(.+blender\.exe)/i)
       if (match) {
         const p = match[1].trim()
-        if (fs.existsSync(p)) return { path: p, version: getBlenderVersion(p) }
+        if (fs.existsSync(p)) return { path: p, version: ver(p) }
       }
     } catch {}
   } else {
     for (const p of BLENDER_LINUX_PATHS) {
-      if (fs.existsSync(p)) return { path: p, version: getBlenderVersion(p) }
+      if (fs.existsSync(p)) return { path: p, version: ver(p) }
     }
   }
 
@@ -178,7 +187,21 @@ function which(cmd: string): string | null {
 
 export function testBinary(type: 'blender' | 'houdini', binPath: string): { version: string } {
   if (!fs.existsSync(binPath)) throw new Error(`Path does not exist: ${binPath}`)
-  const version = type === 'blender' ? getBlenderVersion(binPath) : getHythonVersion(binPath)
-  if (!version) throw new Error('Could not determine version — binary may be invalid')
+
+  if (type === 'blender') {
+    const { version, output, exitCode } = getBlenderVersion(binPath)
+    if (!version) {
+      const snippet = output.trim().slice(0, 300)
+      throw new Error(
+        `Could not read Blender version (exit ${exitCode}).` +
+        (snippet ? `\nOutput: ${snippet}` : '\nNo output received — binary may not be a valid Blender install.')
+      )
+    }
+    return { version }
+  }
+
+  // Houdini / hython
+  const version = getHythonVersion(binPath)
+  if (!version) throw new Error('Could not determine hython version — check that the path points to hython, not houdini.')
   return { version }
 }

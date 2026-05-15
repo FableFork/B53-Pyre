@@ -3,6 +3,16 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initHandlers, cleanupAllJobs } from './ipc/handlers'
 
+function getIconPath(): string {
+  const ext = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+  if (app.isPackaged) {
+    // Packaged: icon sits next to the resources folder (electron-builder places it there)
+    return join(process.resourcesPath, '..', ext)
+  }
+  // Dev: two levels up from out/main/ to the project root, then into assets/
+  return join(__dirname, '../../assets', ext)
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
@@ -10,6 +20,7 @@ function createWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#111111',
+    icon: getIconPath(),
     show: false,
     autoHideMenuBar: true,
     titleBarStyle: 'default',
