@@ -14,6 +14,7 @@ interface ContextMenuState {
 
 export function JobCard({ job, selected, onSelect }: Props) {
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null)
+  const [hovered, setHovered] = useState(false)
 
   const onContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -42,8 +43,10 @@ export function JobCard({ job, selected, onSelect }: Props) {
         }}
         onClick={onSelect}
         onContextMenu={onContextMenu}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        {/* Top row: engine badge + name */}
+        {/* Top row: engine badge + name + delete */}
         <div className="flex items-center gap-2 mb-1">
           <EngineBadge engine={job.engine} />
           <span
@@ -53,7 +56,23 @@ export function JobCard({ job, selected, onSelect }: Props) {
           >
             {job.fileName}
           </span>
-          <StatusBadge status={job.status} />
+          {hovered ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); window.pyre.removeJob(job.id) }}
+              title="Remove job"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: 13, lineHeight: 1,
+                padding: '0 2px', flexShrink: 0,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#e04040')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+            >
+              ✕
+            </button>
+          ) : (
+            <StatusBadge status={job.status} />
+          )}
         </div>
 
         {/* Scene / ROP name */}
