@@ -199,6 +199,7 @@ export async function renderBlenderJob(
 
       let frameRenderStart = Date.now()
       let lineBuffer = ''
+      let stderrBuffer = ''
 
       const processLine = (raw: string) => {
         const line = raw.trim()
@@ -207,7 +208,7 @@ export async function renderBlenderJob(
         const logType = classifyLine(line)
         callbacks.onLog({ timestamp: Date.now(), text: line, type: logType })
 
-        // Fra:N Mem:...
+        // Fra:N Mem:... (Blender may output this to stdout or stderr depending on platform)
         const fraMatch = line.match(/Fra:(\d+)\s+Mem:/)
         if (fraMatch) {
           const frame = parseInt(fraMatch[1])
@@ -240,9 +241,13 @@ export async function renderBlenderJob(
         lines.forEach(processLine)
       })
 
+      // Blender writes Fra:/Rendered progress lines to stderr on Windows —
+      // run it through the same parser so the progress bar actually updates.
       proc.stderr.on('data', (chunk: Buffer) => {
-        const text = chunk.toString().trim()
-        if (text) callbacks.onLog({ timestamp: Date.now(), text, type: 'warning' })
+        stderrBuffer += chunk.toString()
+        const lines = stderrBuffer.split('\n')
+        stderrBuffer = lines.pop() ?? ''
+        lines.forEach(processLine)
       })
 
       proc.on('close', (code) => {

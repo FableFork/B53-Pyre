@@ -326,6 +326,12 @@ input[type='checkbox'] {
 }
 [data-tooltip]:hover::after { opacity: 1; }
 
+/* ── Animations ──────────────────────────────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
 /* ── Log panel ───────────────────────────────────────────────────────────────── */
 .log-line { font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.6; padding: 0 2px; }
 .log-info    { color: #c8c8c8; }

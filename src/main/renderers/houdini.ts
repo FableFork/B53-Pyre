@@ -111,6 +111,7 @@ export async function renderHoudiniJob(
       activeRenders.set(jobId, proc)
 
       let lineBuffer = ''
+      let stderrBuffer = ''
 
       const processLine = (raw: string) => {
         const line = raw.trim()
@@ -145,9 +146,12 @@ export async function renderHoudiniJob(
         lines.forEach(processLine)
       })
 
+      // Houdini also writes render progress to stderr — parse it the same way.
       proc.stderr.on('data', (chunk: Buffer) => {
-        const text = chunk.toString().trim()
-        if (text) callbacks.onLog({ timestamp: Date.now(), text, type: 'warning' })
+        stderrBuffer += chunk.toString()
+        const lines = stderrBuffer.split('\n')
+        stderrBuffer = lines.pop() ?? ''
+        lines.forEach(processLine)
       })
 
       proc.on('close', (code) => {
