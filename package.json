@@ -60,12 +60,15 @@
       }
     ],
     "win": {
-      "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "target": [
+        { "target": "nsis", "arch": ["x64", "arm64"] },
+        { "target": "portable", "arch": ["x64", "arm64"] }
+      ]
     },
     "linux": {
-      "target": ["AppImage", "deb"],
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "target": ["AppImage", "deb"]
     },
     "nsis": {
       "oneClick": false,
